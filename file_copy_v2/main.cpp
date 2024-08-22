@@ -8,30 +8,16 @@
 #include <cstring>
 #include <algorithm>
 #include <fstream>
+#include <ostream>
 
 std::vector<std::string> get_filenames(const std::string& copySource);
-//create a thread function that copies a file
-//the file is passed to the thread, it is read and copied
-//then saved to a new destination
-//the file source and destination are input when the program is run.
-
-//the read and copy should happen in the thread
-//the source file, source folkder and destination should be validated before the thread is run
-
-//int argc = number of arguments will be 4 overall
-//argv[0] = ./mmcopier
-//argv[1] = 3 (for example)
-//argv[2] = source.dir
-//argv[3] = destination.dir
+void* thread_copy_call(void* arg);
+void copy_file_call(const std::string& source, const std::string& destination);
 
 struct ThreadDirectories {
     std::string source_file;
     std::string destination_file;
 };
-
-void* thread_copy_call(void* arg);
-void copy_file_call(const std::string& source, const std::string& destination);
-
 
 int main(int argc, char* argv[]){
 
@@ -42,8 +28,11 @@ int main(int argc, char* argv[]){
     int copyNum = std::stoi(argv[1]); //take number of file to be copied
     std::string copySource = argv[2]; //save source file 
     std::string copyDestination = argv[3]; // save destination file
+    const std::filesystem::path fileDir{copySource};
 
     std::vector<std::string> filenames = get_filenames(copySource);
+
+    std::sort(filenames.begin(), filenames.end(), std::locale("en_US.UTF-8"));
 
     if(copyNum > filenames.size()){
         copyNum = filenames.size();
