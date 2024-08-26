@@ -9,13 +9,21 @@
 #include <algorithm>
 #include <fstream>
 #include <ostream>
+#include <unistd.h>
+#include <queue>
+#include <mutex>
 
 void* read_call(void* arg);
 void* write_call(void* arg);
+void read_to_queue(const std::string& source);
+void write_from_queue(const std::string& destination);
+int lock_check(void* arg);
 
-struct copyDirectories{
-    std::string sourceFile;
-    std::string destinationFile;
+struct ThreadData{
+    std::string sourceFile;            //contains source address
+    std::string destinationFile;       //contains destination address
+    std::queue<std::string>* fileData; //pointer to queue
+    pthread_mutex_t* queueMutex;            //pointer to mutex
 };
 
 
@@ -29,6 +37,8 @@ int main(int argc, char* argv[]){
     int threadNum = std::stoi(argv[1]); //number of threads to use in operations
     std::string copySource = argv[2]; //save source file 
     std::string copyDestination = argv[3]; // save destination file
+    std::queue<std::string> string_queue;
+    pthread_mutex_t queueMutex;
 
     if(std::filesystem::exists(copySource)){
         std::cout << "File location: Success. " << copySource << std::endl;
@@ -44,9 +54,13 @@ int main(int argc, char* argv[]){
         std::cout << "** A destination file has been created **" << std::endl;
     }
 
-    copyDirectories* copyDir = new copyDirectories;
-    copyDir->sourceFile = copySource;
-    copyDir->destinationFile = copyDestination;
+    pthread_mutex_init(&queueMutex, NULL);
+    ThreadData* T_data = new ThreadData;
+    T_data->sourceFile = copySource;
+    T_data->destinationFile = copyDestination;
+    T_data->fileData = &string_queue;
+    T_data->queueMutex = &queueMutex;
+
 
     std::vector<pthread_t> readThreads;
     std::vector<pthread_t> writeThreads;
@@ -56,7 +70,7 @@ int main(int argc, char* argv[]){
     for (int i = 0; i < threadNum; i++){
         pthread_t thread;
 
-        if(pthread_create(&thread, NULL, read_call, copyDir) != 0){
+        if(pthread_create(&thread, NULL, read_call, T_data) != 0){
             std::cout << "read thread creation failed" << std::endl; 
         } else {
             readThreads.push_back(thread);
@@ -66,7 +80,7 @@ int main(int argc, char* argv[]){
     for (int i = 0; i < threadNum; i++){
         pthread_t thread;
 
-        if(pthread_create(&thread, NULL, write_call, copyDir) != 0){
+        if(pthread_create(&thread, NULL, write_call, T_data) != 0){
             std::cout << "write thread creation failed" << std::endl;
         } else {
             writeThreads.push_back(thread);
@@ -97,14 +111,45 @@ int main(int argc, char* argv[]){
     return EXIT_SUCCESS;
 }
 
-void* read_call(void* arg){
+void* read_call(void* args){
+    ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
+    pthread_mutex_lock(Thread_dirs->queueMutex);
     std::cout << "read thread called" << std::endl;
-
+    read_to_queue(Thread_dirs->sourceFile);
+    pthread_mutex_unlock(Thread_dirs->queueMutex);
     return NULL;
 };
 
-void* write_call(void* arg){
+void* write_call(void* args){
+    int lock = 0;
+    ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
+    lock = lock_check(Thread_dirs);
+    if (lock == 1){
+    pthread_mutex_lock(Thread_dirs->queueMutex);
     std::cout << "write thread called" << std::endl;
-
+    write_from_queue(Thread_dirs->destinationFile);
+    }
+    pthread_mutex_unlock(Thread_dirs->queueMutex);
     return NULL;
+};
+
+void read_to_queue(const std::string& source){
+
+    //std::cout << source << std::endl;
+
+};
+
+void write_from_queue(const std::string& destination){
+
+    //std::cout << destination << std::endl;
+
+};
+
+int lock_check(void* args){
+    ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
+    std::cout << Thread_dirs->sourceFile << std::endl;
+
+    //checks queue and decides to lock or unlock
+
+    return 1;
 };
