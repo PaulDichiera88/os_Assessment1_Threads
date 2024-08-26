@@ -112,30 +112,57 @@ int main(int argc, char* argv[]){
 }
 
 void* read_call(void* args){
+    int queueFull = 20;
+    std::string line;
+    std::cout << "Entered readers" << std::endl; 
+    // wake up the producers if queue is full with 20 items
+    // wake up the producers if we have reached the end of the file
+    // wake up the producers if we have 10 threads asleep? if thats possible
     ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
-    pthread_mutex_lock(Thread_dirs->queueMutex);
-    std::cout << "read thread called" << std::endl;
-    read_to_queue(Thread_dirs->sourceFile);
-    pthread_mutex_unlock(Thread_dirs->queueMutex);
+    std::ifstream inputFile(Thread_dirs->sourceFile);
+    if(!inputFile.is_open()){
+        std::cerr << "Error :Could not open file " << Thread_dirs->sourceFile << std::endl;
+    }
+    std::cout << Thread_dirs->sourceFile << std::endl;
+    while(std::getline(inputFile, line)){   
+        pthread_mutex_lock(Thread_dirs->queueMutex);
+        while (Thread_dirs->fileData->size() >= queueFull){
+            std::cout << "queue full" << std::endl;
+            pthread_mutex_unlock(Thread_dirs->queueMutex);
+            sleep(40);  // Sleep to prevent busy-waiting
+            //pthread_mutex_lock(Thread_dirs->queueMutex);
+        }
+        Thread_dirs->fileData->push(line);
+        std::cout << "read thread called" << std::endl;
+        pthread_mutex_unlock(Thread_dirs->queueMutex);
+
+    }
     return NULL;
 };
 
 void* write_call(void* args){
-    int lock = 0;
+
+    // wake up the readers if the queue has 0 items to write
+
     ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
-    lock = lock_check(Thread_dirs);
-    if (lock == 1){
-    pthread_mutex_lock(Thread_dirs->queueMutex);
-    std::cout << "write thread called" << std::endl;
-    write_from_queue(Thread_dirs->destinationFile);
+    std::ofstream outputFile(Thread_dirs->destinationFile);
+    while(!Thread_dirs->fileData->empty()){
+        pthread_mutex_lock(Thread_dirs->queueMutex);
+        outputFile << Thread_dirs->fileData->front() << std::endl;
+        Thread_dirs->fileData->pop();
+        std::cout << "writing" << std::endl;
+        pthread_mutex_unlock(Thread_dirs->queueMutex);
     }
-    pthread_mutex_unlock(Thread_dirs->queueMutex);
+    std::cout << "write thread called" << std::endl;
+    //write_from_queue(Thread_dirs->destinationFile);
     return NULL;
 };
 
 void read_to_queue(const std::string& source){
 
     //std::cout << source << std::endl;
+    //std::ifstream file(source);
+
 
 };
 
