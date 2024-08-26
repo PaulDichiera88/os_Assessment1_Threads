@@ -18,6 +18,10 @@ struct ThreadDirectories {
     std::string source_file;
     std::string destination_file;
 };
+// ToDo
+// address file order problem, will require a sort function when dimplementing the filename vector order.
+// Check source directory exists and contents before running threads
+// Ensure destination directory exists before running threads, if not create one.
 
 int main(int argc, char* argv[]){
 
@@ -60,12 +64,6 @@ int main(int argc, char* argv[]){
     for (pthread_t& thread : threads) {
         pthread_join(thread, NULL);
     }
-
-
-    // Check source directory exists and contents
-
-    // Ensure destination directory exists
-
 
     return EXIT_SUCCESS;
 }
