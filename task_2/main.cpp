@@ -23,7 +23,9 @@ struct ThreadData{
     std::string sourceFile;            //contains source address
     std::string destinationFile;       //contains destination address
     std::queue<std::string>* fileData; //pointer to queue
-    pthread_mutex_t* queueMutex;            //pointer to mutex
+    pthread_mutex_t* queueMutex;       //pointer to mutex
+    pthread_cond_t* readCond;
+    pthread_cond_t* writeCond;
 };
 
 
@@ -39,6 +41,8 @@ int main(int argc, char* argv[]){
     std::string copyDestination = argv[3]; // save destination file
     std::queue<std::string> string_queue;
     pthread_mutex_t queueMutex;
+    pthread_cond_t readCond;
+    pthread_cond_t writeCond;
 
     if(std::filesystem::exists(copySource)){
         std::cout << "File location: Success. " << copySource << std::endl;
@@ -53,13 +57,16 @@ int main(int argc, char* argv[]){
         std::ofstream destinationFile(copyDestination);
         std::cout << "** A destination file has been created **" << std::endl;
     }
-
+    pthread_cond_init(&readCond, NULL);
+    pthread_cond_init(&writeCond, NULL);
     pthread_mutex_init(&queueMutex, NULL);
     ThreadData* T_data = new ThreadData;
     T_data->sourceFile = copySource;
     T_data->destinationFile = copyDestination;
     T_data->fileData = &string_queue;
     T_data->queueMutex = &queueMutex;
+    T_data->readCond = &readCond;
+    T_data->writeCond = &writeCond;
 
 
     std::vector<pthread_t> readThreads;
@@ -124,16 +131,19 @@ void* read_call(void* args){
         std::cerr << "Error :Could not open file " << Thread_dirs->sourceFile << std::endl;
     }
     std::cout << Thread_dirs->sourceFile << std::endl;
-    while(std::getline(inputFile, line)){   
-        pthread_mutex_lock(Thread_dirs->queueMutex);
+
+    while(!inputFile.eof()){   
+        pthread_mutex_lock(Thread_dirs->queueMutex); // Lock then check.
+
         while (Thread_dirs->fileData->size() >= queueFull){
             std::cout << "queue full" << std::endl;
-            pthread_mutex_unlock(Thread_dirs->queueMutex);
-            sleep(40);  // Sleep to prevent busy-waiting
-            //pthread_mutex_lock(Thread_dirs->queueMutex);
+            pthread_cond_broadcast(Thread_dirs->writeCond);
+            pthread_cond_wait(Thread_dirs->readCond, Thread_dirs->queueMutex);
         }
+        std::getline(inputFile, line);
         Thread_dirs->fileData->push(line);
-        std::cout << "read thread called" << std::endl;
+        usleep(100);
+        std::cout << "read thread called: " << line << std::endl;
         pthread_mutex_unlock(Thread_dirs->queueMutex);
 
     }
@@ -146,11 +156,21 @@ void* write_call(void* args){
 
     ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
     std::ofstream outputFile(Thread_dirs->destinationFile);
+    //sleep(1);
+    pthread_mutex_lock(Thread_dirs->queueMutex);
+
+    pthread_cond_wait(Thread_dirs->writeCond, Thread_dirs->queueMutex);
     while(!Thread_dirs->fileData->empty()){
-        pthread_mutex_lock(Thread_dirs->queueMutex);
+        pthread_mutex_lock(Thread_dirs->queueMutex); // Lock then check
+
+        while(Thread_dirs->fileData->empty()){
+            std::cout << "Queue is empty, waiting..." << std::endl;
+            pthread_cond_wait(Thread_dirs->writeCond, Thread_dirs->queueMutex);
+        }
         outputFile << Thread_dirs->fileData->front() << std::endl;
+        std::cout << "writing: " << Thread_dirs->fileData->front() << std::endl;
         Thread_dirs->fileData->pop();
-        std::cout << "writing" << std::endl;
+        usleep(100);
         pthread_mutex_unlock(Thread_dirs->queueMutex);
     }
     std::cout << "write thread called" << std::endl;
@@ -158,25 +178,25 @@ void* write_call(void* args){
     return NULL;
 };
 
-void read_to_queue(const std::string& source){
+// void read_to_queue(const std::string& source){
 
-    //std::cout << source << std::endl;
-    //std::ifstream file(source);
+//     //std::cout << source << std::endl;
+//     //std::ifstream file(source);
 
 
-};
+// };
 
-void write_from_queue(const std::string& destination){
+// void write_from_queue(const std::string& destination){
 
-    //std::cout << destination << std::endl;
+//     //std::cout << destination << std::endl;
 
-};
+// };
 
-int lock_check(void* args){
-    ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
-    std::cout << Thread_dirs->sourceFile << std::endl;
+// int lock_check(void* args){
+//     ThreadData* Thread_dirs = static_cast<ThreadData*>(args);
+//     std::cout << Thread_dirs->sourceFile << std::endl;
 
-    //checks queue and decides to lock or unlock
+//     //checks queue and decides to lock or unlock
 
-    return 1;
-};
+//     return 1;
+// };
