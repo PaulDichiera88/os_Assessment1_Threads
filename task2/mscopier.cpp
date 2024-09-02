@@ -155,7 +155,7 @@ void* read_call(void* args){
         pthread_mutex_lock(threadData->queueMutex);
 
         // reading validate conditions
-        while (threadData->readData->size() >= queueFull){
+        while (threadData->readData->size() >= static_cast<std::queue<std::string>::size_type>(queueFull)){
             pthread_cond_broadcast(threadData->condQueueWrite);
             pthread_cond_wait(threadData->condQueueRead, threadData->queueMutex);
         }

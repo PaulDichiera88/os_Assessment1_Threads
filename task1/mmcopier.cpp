@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
     // Store filenames from the directory
     std::vector<std::string> filenames = get_filenames(copySource);
 
-    if (copyNum > filenames.size()) {
+    if (copyNum > static_cast<int>(filenames.size())) {
         copyNum = filenames.size();
     }
 
