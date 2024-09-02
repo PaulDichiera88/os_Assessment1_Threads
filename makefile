@@ -11,6 +11,5 @@ mscopier: task2/mscopier.cpp
 # Clean target to remove compiled executables and generated files
 clean:
 	rm -f mmcopier mscopier
-	rm -f task1/input.txt task1/output.txt
-	rm -f task2/destination.txt task2/source.txt
-	rm -rf task1/destination_dir task2/destination_dir
+	rm -f task2/destination.txt
+	rm -rf task1/destination_dir 
