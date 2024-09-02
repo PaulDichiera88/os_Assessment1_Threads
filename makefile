@@ -12,4 +12,4 @@ mscopier: task2/mscopier.cpp
 clean:
 	rm -f mmcopier mscopier
 	rm -f task2/destination.txt
-	rm -rf task1/destination_dir 
+	rm -rf task1/destination_dir/source*

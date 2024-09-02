@@ -66,7 +66,7 @@ int main(int argc, char* argv[]){
         }
         std::cout << "File location: Success... " << copyDestination << std::endl;
     } else {
-        std::cout << "File location: Failed... " << "Destination file name is incorrect or does not exist. Creating" << copyDestination << std::endl;
+        std::cout << "File location: Failed... " << "Destination file name is incorrect or does not exist. Creating " << copyDestination << std::endl;
         outputFile.open(copyDestination);
         if(!outputFile.is_open()){
             std::cerr << "Error: Could not open destination file " << copyDestination << std::endl;
@@ -76,6 +76,7 @@ int main(int argc, char* argv[]){
     }
 
     std::cout << "** Starting Operation **" << std::endl;
+
     // initialize mutex and condition variables
     pthread_cond_init(&condQueueRead, NULL);
     pthread_cond_init(&condQueueWrite, NULL);
@@ -138,7 +139,7 @@ int main(int argc, char* argv[]){
     delete threadData;
 
     std::cout << "** Operation Complete **" << std::endl;
-    std::cout << " Have a lovey day :) " << std::endl;
+    std::cout << "** Have a lovey day :) **" << std::endl;
 
     return EXIT_SUCCESS;
 }
