@@ -2,7 +2,7 @@ all: mscopier mmcopier
 
 # Compile mmcopier from task1/mmcopier.cpp
 mmcopier: task1/mmcopier.cpp
-	g++ -Wall -Werror -std=c++17 -O -o mmcopier task1/mmcopier.cpp -lpthread
+	g++ -Wall -Werror -std=c++17 -O -o mmcopier task1/mmcopier.cpp -lpthread -lstdc++fs
 
 # Compile mscopier from task2/mscopier.cpp
 mscopier: task2/mscopier.cpp

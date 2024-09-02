@@ -1,0 +1,362 @@
+******** TASK 1 ********
+
+#include <iostream>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string>
+#include <filesystem>
+#include <vector>
+#include <dirent.h>
+#include <cstring>
+#include <algorithm>
+#include <fstream>
+#include <ostream>
+
+// function declarations
+std::vector<std::string> get_filenames(const std::string& copySource);
+void* thread_copy_call(void* arg);
+void copy_file_call(const std::string& source, const std::string& destination);
+
+// structure for destination and source file paths
+struct ThreadDirectories {
+    std::string source_file;
+    std::string destination_file;
+};
+
+int main(int argc, char* argv[]){
+
+    std::cout << "** Performing Checks **" << std::endl;
+
+    // input validation
+    if (argc != 4){
+        std::cout << "required input: <number of files to copy, integer> <source folder> <destination folder> " << std::endl;
+    }
+
+    // process input arguments
+    int copyNum = std::stoi(argv[1]); //take number of file to be copied
+    std::string copySource = argv[2]; //save source file 
+    std::string copyDestination = argv[3]; // save destination file
+    const std::filesystem::path fileDir{copySource};
+
+    // validate source directory
+    if (!std::filesystem::exists(copySource) || !std::filesystem::is_directory(copySource)){
+        std::cerr << "Error: Source directory does now exist or is not a directory." << std::endl;
+        return EXIT_SUCCESS;
+    }
+
+    if(!std::filesystem::exists(copyDestination)){
+        std::cout << "Directory location: Failed... " << "Destination directory name is incorrect or does not exist. Creating " << copyDestination << std::endl;
+        if (!std::filesystem::create_directories(copyDestination)){
+            std::cerr << "Error: Could not create destination directory." << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::cout << "** A destination directory has been created **" << std::endl;
+    }
+
+    std::cout << "** Starting Operation **" << std::endl;
+
+    // store filenames from directory
+    std::vector<std::string> filenames = get_filenames(copySource);
+
+    if(copyNum > static_cast<int>(filenames.size())){
+        copyNum = filenames.size();
+    }
+
+    // create vector to store threads
+    std::vector<pthread_t> threads;
+
+    // create threads and call copy function
+    for( int i = 0; i < copyNum; i++){
+        pthread_t thread;
+
+        // allocated memory and populate struct
+        ThreadDirectories* threadDir = new ThreadDirectories;
+        std::string filename = "source" + std::to_string(i + 1) + ".txt";
+        threadDir->source_file = copySource + "/" + filename;
+        threadDir->destination_file = copyDestination + "/" + filename;
+
+        if(pthread_create(&thread, NULL, thread_copy_call, threadDir) != 0){
+            delete threadDir;
+        }else{
+            threads.push_back(thread);
+        }
+    }
+
+    // Join threads
+    for (pthread_t& thread : threads) {
+        pthread_join(thread, NULL);
+    }
+
+    std::cout << "** Operation Complete **" << std::endl;
+    std::cout << "** Have a lovey day :) **" << std::endl;
+
+    return EXIT_SUCCESS;
+}
+
+    // retrive and sort filenames from source directory
+std::vector<std::string> get_filenames(const std::string& copySource){
+    std::vector<std::string> filenames;
+
+    DIR* dir = opendir(copySource.c_str());
+    if(dir == nullptr){
+        std::cerr << "Error: Could not open source directory." << std::endl;
+        return filenames;
+    }
+
+    struct dirent* entry;
+    while(( entry = readdir(dir)) != nullptr){
+        if(!(std::strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)){
+            filenames.push_back(entry->d_name);
+        }    
+    }
+    closedir(dir);
+
+    //sort to ensure order
+    std::sort(filenames.begin(), filenames.end(), std::locale("en_US.UTF-8"));
+
+    return filenames;
+}
+
+void* thread_copy_call(void* args){
+    ThreadDirectories* Thread_Dirs = static_cast<ThreadDirectories*>(args);
+
+    // file copy
+    copy_file_call(Thread_Dirs->source_file, Thread_Dirs->destination_file);
+
+    // free memory 
+    delete Thread_Dirs;
+
+    // exit thread
+    pthread_exit(NULL);
+
+    return NULL;
+
+};
+
+void copy_file_call(const std::string& source, const std::string& destination){
+    std::ifstream src(source, std::ios::binary);
+    std::ofstream dst(destination, std::ios::binary);
+
+    if(!src.is_open()){
+        std::cerr << "ERROR: Could not open source file: " << source << std::endl;
+        return; 
+    }
+
+    if(!dst.is_open()){
+        std::cerr << "Error: Could not open source file: " << destination << std::endl;
+        return;
+    }
+
+    dst << src.rdbuf();
+
+};
+
+******** TASK 2 ********
+
+#include <iostream>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string>
+#include <filesystem>
+#include <vector>
+#include <fstream>
+#include <queue>
+#include <mutex>
+
+void* read_call(void* arg);
+void* write_call(void* arg);
+
+struct ThreadData{
+    std::string sourceFile;            //contains source address
+    std::string destinationFile;       //contains destination address
+    std::ifstream* inputFile;
+    std::ofstream* outputFile;
+    std::queue<std::string>* readData; //pointer to queue
+    pthread_mutex_t* queueMutex;       //pointer to mutex
+    pthread_cond_t* condQueueRead;
+    pthread_cond_t* condQueueWrite;
+    bool readComplete = false;
+};
+
+
+// Threads that read data to a container, Threads that write data from that container
+int main(int argc, char* argv[]){
+
+    std::cout << "** Performing Checks **" << std::endl;
+
+    if (argc != 4){
+        std::cout << "required input: <number of files to copy, integer> <source folder> <destination folder> " << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    int threadNum = std::stoi(argv[1]);     //number of threads to use in operations
+    std::string copySource = argv[2];       //save source file 
+    std::string copyDestination = argv[3];  // save destination file
+    std::queue<std::string> string_queue;   // container for source data
+    pthread_mutex_t queueMutex;             // Mutex lock
+    pthread_cond_t condQueueRead;           // reader condition
+    pthread_cond_t condQueueWrite;          // writer condition
+
+    // source file check and open
+    std::ifstream inputFile;
+    if(std::filesystem::exists(copySource)){ 
+        inputFile.open(copySource);
+        std::cout << "File location: Success... " << copySource << std::endl;
+        if(!inputFile.is_open()){
+            std::cerr << "Error: Could not open source file " << copySource << std::endl;
+            return EXIT_FAILURE;
+        }
+    } else {
+        std::cout << "File location: Failed... " << "Source file is incorrect or does not exist" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    // destination file check, open and creation if required
+    std::ofstream outputFile;
+    if(std::filesystem::exists(copyDestination)){
+        outputFile.open(copyDestination);
+        if(!outputFile.is_open()){
+            std::cerr << "Error: Could not open destination file " << copyDestination << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::cout << "File location: Success... " << copyDestination << std::endl;
+    } else {
+        std::cout << "File location: Failed... " << "Destination file name is incorrect or does not exist. Creating " << copyDestination << std::endl;
+        outputFile.open(copyDestination);
+        if(!outputFile.is_open()){
+            std::cerr << "Error: Could not open destination file " << copyDestination << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::cout << "** A destination file has been created **" << std::endl;
+    }
+
+    std::cout << "** Starting Operation **" << std::endl;
+
+    // initialize mutex and condition variables
+    pthread_cond_init(&condQueueRead, NULL);
+    pthread_cond_init(&condQueueWrite, NULL);
+    pthread_mutex_init(&queueMutex, NULL);
+
+    // allocate and populate ThreadData struct
+    ThreadData* threadData = new ThreadData;
+
+    threadData->sourceFile = copySource;
+    threadData->destinationFile = copyDestination;
+    threadData->readData = &string_queue;
+    threadData->queueMutex = &queueMutex;
+    threadData->condQueueRead = &condQueueRead;
+    threadData->condQueueWrite = &condQueueWrite;
+    threadData->inputFile = &inputFile;
+    threadData->outputFile = &outputFile;
+
+    // initialisation of thread conainers
+    std::vector<pthread_t> readThreads;
+    std::vector<pthread_t> writeThreads;
+
+    // initialisation of read threads, call read function
+    for (int i = 0; i < threadNum; i++){
+        pthread_t thread;
+
+        if(pthread_create(&thread, NULL, read_call, threadData) != 0){
+            std::cout << "read thread creation failed" << std::endl; 
+        } else {
+            readThreads.push_back(thread);
+        }
+    }
+
+    // initialisation of write threads, call write function
+    for (int i = 0; i < threadNum; i++){
+        pthread_t thread;
+
+        if(pthread_create(&thread, NULL, write_call, threadData) != 0){
+            std::cout << "write thread creation failed" << std::endl;
+        } else {
+            writeThreads.push_back(thread);
+        }
+    }
+
+    // join threads
+    for(pthread_t& thread : readThreads){
+        pthread_join(thread, NULL);
+    }
+    for(pthread_t& thread : writeThreads){
+        pthread_join(thread, NULL);
+    }
+
+    // declete allocated memory
+    pthread_mutex_destroy(threadData->queueMutex);
+    pthread_cond_destroy(threadData->condQueueRead);
+    pthread_cond_destroy(threadData->condQueueWrite);
+
+    // closing files and freeing memory
+    threadData->inputFile->close();
+    threadData->outputFile->close();
+    delete threadData;
+
+    std::cout << "** Operation Complete **" << std::endl;
+    std::cout << "** Have a lovey day :) **" << std::endl;
+
+    return EXIT_SUCCESS;
+}
+
+// reads from input file and manages threads
+void* read_call(void* args){
+    ThreadData* threadData = static_cast<ThreadData*>(args);
+    int queueFull = 20;
+    std::string line;
+    bool readingData = true;
+
+    while(readingData){   
+        pthread_mutex_lock(threadData->queueMutex);
+
+        // reading validate conditions
+        while (threadData->readData->size() >= static_cast<std::queue<std::string>::size_type>(queueFull)){
+            pthread_cond_broadcast(threadData->condQueueWrite);
+            pthread_cond_wait(threadData->condQueueRead, threadData->queueMutex);
+        }
+        if (threadData->inputFile->eof()){
+            pthread_cond_broadcast(threadData->condQueueWrite);
+            threadData->readComplete = true;
+            readingData = false;
+
+        } else if (readingData){
+            std::getline(*threadData->inputFile, line);
+            threadData->readData->push(line);
+
+        }
+        pthread_mutex_unlock(threadData->queueMutex);
+        pthread_cond_signal(threadData->condQueueWrite);
+
+    }
+    pthread_exit(NULL);
+    return NULL;
+};
+
+// writes from container and manages threads
+void* write_call(void* args){
+    ThreadData* threadData = static_cast<ThreadData*>(args);
+    bool writingData = true;
+
+    while(writingData){
+        pthread_mutex_lock(threadData->queueMutex); // Lock then check
+
+        while (threadData->readData->empty() && !threadData->readComplete){
+            pthread_cond_broadcast(threadData->condQueueRead);
+            pthread_cond_wait(threadData->condQueueWrite, threadData->queueMutex);
+        }
+
+        if(threadData->readComplete && threadData->readData->empty()){
+                writingData = false;
+        } else {
+            *threadData->outputFile << threadData->readData->front() << std::endl;
+            threadData->readData->pop();
+        }
+
+        pthread_mutex_unlock(threadData->queueMutex);
+        pthread_cond_signal(threadData->condQueueRead);
+    }
+    pthread_exit(NULL);
+    return NULL;
+};
+
+*********************
