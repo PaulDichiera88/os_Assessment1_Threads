@@ -80,8 +80,6 @@ int main(int argc, char* argv[]){
     threadData->inputFile = &inputFile;
     threadData->outputFile = &outputFile;
 
-
-
     std::vector<pthread_t> readThreads;
     std::vector<pthread_t> writeThreads;
 
